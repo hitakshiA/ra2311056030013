@@ -1,26 +1,26 @@
 # Notification System Design
 
-## Stage 1 — Requirements and Use Cases
+## Stage 1 - Requirements and Use Cases
 
 ### Functional
 - Surface notifications to a user, ordered so the most important unread items appear first.
 - Each notification has a `Type` (`Placement` | `Result` | `Event`), a `Message`, and a `Timestamp`.
 - A notification can be marked read; read notifications drop out of the priority inbox view.
-- The system must expose a `top-N unread` query — the caller asks for the next N items to act on.
+- The system must expose a `top-N unread` query - the caller asks for the next N items to act on.
 - Type carries weight: `Placement = 3`, `Result = 2`, `Event = 1`. Within a weight bucket, more recent notifications come first.
 
 ### Non-functional
 - Read latency on the inbox endpoint must stay under ~200ms at P95 with thousands of notifications cached.
 - The upstream source of truth (`/notifications`) is treated as authoritative for the catalog; read state is local to this service.
 - Bearer auth on every upstream call, with token caching and refresh on 401.
-- All operational logs go through the shared logging middleware — no console output.
+- All operational logs go through the shared logging middleware - no console output.
 
 ### Out of scope (for stage 6)
 - Push delivery (websocket, APNs, FCM).
 - Multi-tenant fan-out, retention policies, or archival.
 - User authentication on the inbox endpoint itself (single-user assessment context).
 
-## Stage 2 — API Design
+## Stage 2 - API Design
 
 ```
 GET  /inbox?limit=10
@@ -58,7 +58,7 @@ Marks a single notification as read. Idempotent.
 ### `POST /inbox/refresh`
 Forces an upstream refresh of the cache. Useful for demo and for the priority inbox endpoint to be deterministic during a screenshot.
 
-## Stage 3 — Data Model
+## Stage 3 - Data Model
 
 Two stores, both in-process for stage 6:
 
@@ -78,7 +78,7 @@ sortKey(item) = (-weight(type), -epochMillis(timestamp))
 
 The projection runs on read. With N notifications it is `O(N log N)` per request, which is fine at the volumes the upstream returns. If N grew to the millions a heap-of-N would be the next step.
 
-## Stage 4 — Component Architecture
+## Stage 4 - Component Architecture
 
 ```
 +--------------------------+
@@ -105,12 +105,12 @@ The projection runs on read. With N notifications it is `O(N log N)` per request
 ```
 
 Boundaries:
-- The route layer is thin — it parses query params, calls the service, serializes JSON.
+- The route layer is thin - it parses query params, calls the service, serializes JSON.
 - The service owns the ranking and the read set. It does not know about HTTP.
 - The source client owns axios, bearer caching, and upstream URL composition.
-- The logging middleware is the only interface to observability — every layer above it calls `Log(...)` for non-trivial events.
+- The logging middleware is the only interface to observability - every layer above it calls `Log(...)` for non-trivial events.
 
-## Stage 5 — Scaling, Reliability, Observability
+## Stage 5 - Scaling, Reliability, Observability
 
 ### Scaling
 - Per-instance memory: hundreds of bytes per notification, so a single node holds ~500k items in <100MB.
@@ -124,17 +124,17 @@ Boundaries:
 
 ### Observability
 - Every layer logs through `Log(stack, level, package, message)`. Packages used:
-  - `route` — request entry/exit, status codes
-  - `service` — ranking decisions, cache hits/misses
-  - `repository` — upstream calls
-  - `middleware` — per-request trace
-  - `config` — startup
-  - `auth` — bearer issued / refreshed
+  - `route` - request entry/exit, status codes
+  - `service` - ranking decisions, cache hits/misses
+  - `repository` - upstream calls
+  - `middleware` - per-request trace
+  - `config` - startup
+  - `auth` - bearer issued / refreshed
 - Log levels follow the spec: `info` for routine flow, `warn` for empty upstream payloads or stale-cache reads, `error` for HTTP failures, `fatal` reserved for boot failure.
 
-## Stage 6 — Implementation Approach
+## Stage 6 - Implementation Approach
 
-For the assessment, stage 6 is a working backend in `notification_app_be/` that delivers the priority inbox.
+Stage 6 implements the priority inbox as a working backend in notification_app_be/.
 
 1. On boot, `initLogger()` configures the shared middleware. The Express app mounts a request-trail middleware that emits one `Log("backend","info","middleware",...)` per request.
 2. The `SourceClient` shares the same axios pattern as Q1: an interceptor calls `obtainBearer()` from the logging middleware before every upstream request, so `/notifications` calls are always authenticated and refresh on 401.
@@ -145,8 +145,8 @@ For the assessment, stage 6 is a working backend in `notification_app_be/` that 
    - sort by `(-weight, -timestampEpoch)`
    - take the first `limit`
 5. The handler returns `{ items, totalUnread, fetchedAt }`.
-6. `POST /inbox/:id/read` adds the id to the local read set and returns the new unread count. The catalog is not mutated — read state is a separate concern, matching stage 3.
+6. `POST /inbox/:id/read` adds the id to the local read set and returns the new unread count. The catalog is not mutated - read state is a separate concern, matching stage 3.
 
-Trade-offs accepted for the assessment scope:
-- In-memory state means the read set resets on restart. For a real deployment this would move to Redis or a small Postgres table; the service interface (`markRead`, `isRead`) is already shaped for that swap.
-- Single-user assumption — there is no `userId` on the read set. The shape of the read store leaves room to key by user when multi-tenant becomes a requirement.
+Known limitations:
+- In-memory state means the read set resets on restart. In production this would move to Redis or a small Postgres table; the service interface (markRead, isRead) is already shaped for that swap.
+- Single-user assumption - there is no `userId` on the read set. The shape of the read store leaves room to key by user when multi-tenant becomes a requirement.
