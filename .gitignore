@@ -1,8 +1,12 @@
 node_modules
 .DS_Store
 .env
+.env.*
+*.local
 dist
 build
 *.log
 .vscode
 .idea
+**/src/verify.ts
+**/dist/verify.*
