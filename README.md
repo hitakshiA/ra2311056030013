@@ -52,3 +52,9 @@ Override either with `PORT=...`.
 - axios for upstream calls
 - 0/1 knapsack DP written in-package (no algorithm libraries)
 - Shared logging middleware consumed via `file:` workspace dependency
+
+## Known limitations
+
+- Read-state is in-memory; restarts reset the unread set. Persistence target is Redis or a small Postgres table.
+- Single-user assumption on the inbox endpoint - read state is not keyed by user.
+- Upstream catalog is refetched on demand; no scheduled background refresh in this version.

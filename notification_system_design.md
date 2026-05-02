@@ -1,5 +1,7 @@
 # Notification System Design
 
+A campus notification platform that surfaces Placements, Results, and Events to students in real time. This document covers the API contract, data model, scaling concerns, and the ranking implementation across six stages.
+
 ## Stage 1 - Requirements and Use Cases
 
 ### Functional
@@ -119,7 +121,7 @@ Boundaries:
 
 ### Reliability
 - Bearer token cache with absolute-expiry awareness; on 401 the middleware invalidates and retries once.
-- Upstream `/notifications` is fetched on first request and on demand; failures fall back to the last successful snapshot (graceful degradation rather than a hard 502).
+- Upstream `/notifications` is fetched on first request and on demand; failures fall back to the last successful snapshot (serving the last known good response instead of a 502).
 - All write actions (mark-read) are idempotent; replay is safe.
 
 ### Observability
